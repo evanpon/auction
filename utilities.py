@@ -22,42 +22,44 @@ def send_to_connection(event, message, connection_id=None):
         gatewayapi.post_to_connection(Data=message,ConnectionId=connection_id)
     except Exception as error:
         print("Error sending to connection:", error)
-        delete_all_rows_for_connection(event, connection_id)
+        delete_connection(connection_id)
 
 
-def get_item(partition_id, connection_id):
+def get_item(partition_id, sort_id):
     response = table.get_item(
         Key={
             'partition_id': partition_id,
-            'connection_id': connection_id
+            'sort': sort_id
         }
     )
     return response.get("Item", None)
 
-def get_room_row(room, connection_id):
-    return get_item(room, connection_id)
+def get_connected_users():
+    return get_item('connections', 'connections')
 
-def get_connection_row(connection_id):
-    return get_item(partition_id_from_connection(connection_id), connection_id)
+def get_items():
+    return get_item('items', 'items')
 
-def store_item(partition_id, connection_id, attributes=None):
+def store_item(partition_id, sort_id, attributes=None):
     ''' Stores the provided attributes in Dynamo. If none are provided, it just stores the 
         composite key.'''
     if attributes is None:
         attributes = {}
-    key = {'partition_id': partition_id, 'connection_id': connection_id}
+    key = {'partition_id': partition_id, 'sort_id': sort_id}
     item = {**key, **attributes}
     return table.put_item(
         Item=item
     )
 
 def store_connection_row(connection_id, attributes):
-    return store_item(partition_id_from_connection(connection_id), connection_id, attributes)
+    # TODO: need to implement
+    return None
+    # return store_item(partition_id_from_connection(connection_id), connection_id, attributes)
 
-def store_room_row(room, connection_id, attributes):
-    return store_item(room, connection_id, attributes)
+def store_bid(item_id, bid_amount, attributes):
+    return store_item(item_id, bid_amount, attributes)
 
-def update_item(partition_id, connection_id, attributes):
+def update_item(partition_id, sort_id, attributes):
     update_expressions = []
     expression_values = {}
     for key in attributes:
@@ -69,51 +71,29 @@ def update_item(partition_id, connection_id, attributes):
     return table.update_item(
         Key={
             'partition_id': partition_id,
-            'connection_id': connection_id
+            'sort_id': sort_id
         },
         UpdateExpression=update_expression_str,
         ExpressionAttributeValues=expression_values
     )
-def delete_item(partition_id, connection_id):
+def delete_item(partition_id, sort_id):
     table.delete_item(
         Key={
             'partition_id': partition_id,
-            'connection_id': connection_id
+            'sort_id': sort_id
         }
     )
-def delete_all_rows_for_connection(event, connection_id):
-    user = get_connection_row(connection_id)
-    if user:
-        room = user["room"]
-        delete_item(room, connection_id)
-        delete_item(partition_id_from_connection(connection_id), connection_id)
 
-        users = get_room_members(room)
-        message = f'{user["user"]} has left {room}'
-        notify_users(event, users, message)
-        finish_voting_if_complete(event, room, users)
+def delete_connection(connection_id):
+    # TODO: implement
+    return None
 
 def notify_users(event, users, message):
+    # TODO: must modify
     for user in users:
         connection_id = user['connection_id']
         send_to_connection(event, message, connection_id)
 
-def notify_room(event, room, message):
-    users = get_room_members(room)
-    notify_users(event, users, message)
-
-def get_room_members(room):
-    response = table.query(
-        KeyConditionExpression=Key('partition_id').eq(room)
-    )
-    return response['Items']
-
-
-# Here we are using the connection_id as the partition_key, so we can 
-# find this row on disconnect. Prefix it with a reserved character (the asterisk)
-# to make sure it doesn't overlap with any real room names.
-def partition_id_from_connection(connection_id):
-    return f'*{connection_id}'
 
 def handle_error(message, event, error_code=400):
     print("Error: ", message)
@@ -121,17 +101,4 @@ def handle_error(message, event, error_code=400):
     return {
         "statusCode": error_code
     }
-
-def finish_voting_if_complete(event, room, users, completed_votes=None):
-    if completed_votes is None:
-        completed_votes = []
-        for user in users:
-            vote = user.get("vote", None)
-            if vote is not None:
-                completed_votes.append({"user": user["user"], "vote": int(vote)})
-    if len(users) == len(completed_votes):
-        for user in users:
-            connection_id = user['connection_id']
-            update_item(room, connection_id, {"vote": None})
-            send_to_connection(event, completed_votes, connection_id)
 

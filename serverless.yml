@@ -71,14 +71,14 @@ resources:
             AttributeName: partition_id
             AttributeType: S
           - 
-            AttributeName: connection_id
+            AttributeName: sort_id
             AttributeType: S
         KeySchema:
           -
             AttributeName: partition_id
             KeyType: HASH
           - 
-            AttributeName: connection_id
+            AttributeName: sort_id
             KeyType: RANGE
         ProvisionedThroughput:
           ReadCapacityUnits: 1
