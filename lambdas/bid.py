@@ -6,10 +6,10 @@ def execute(event, context):
 
     body = json.loads(event["body"])
     item_id = body["item_id"]
-    bid_amount = body["bid_amount"]
+    bid_amount = int(body["bid_amount"])
     attributes = {
         "contact_info": body["contact_info"],
-        "timestamp": datetime.datetime.now().ctime()
+        "bid_at": datetime.datetime.now().ctime()
     }     
     store_bid(item_id, bid_amount, attributes)
 

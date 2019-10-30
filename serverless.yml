@@ -82,7 +82,7 @@ resources:
             AttributeType: S
           - 
             AttributeName: sort_id
-            AttributeType: S
+            AttributeType: N
         KeySchema:
           -
             AttributeName: partition_id

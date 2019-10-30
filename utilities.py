@@ -2,12 +2,37 @@ import boto3
 import os
 import json
 from boto3.dynamodb.conditions import Key, Attr
+from decimal import Decimal
 
 def dynamo_table():
     dynamodb = boto3.resource('dynamodb')
     return dynamodb.Table(os.environ['DYNAMODB_TABLE'])
 
 table = dynamo_table()
+
+def get_connections():
+    record = get_item('connections', 0)
+    if record:
+        return record["connections"], int(record["version"])
+    return [], 0
+
+def store_connection_row(connection_id):
+    debug("START store the connection")
+    connections, version = get_connections()
+    connections.append(connection_id)
+    update_item('connections', 0, {'connections': connections, 'version': str(version + 1)})
+    print("END connection stored")
+
+def delete_connection(connection_id):
+    debug("START delete the connection")
+    connections, version = get_connections()
+    if len(connections) > 0:
+        debug("found connections: ", connections)
+        connections.remove(connection_id)
+
+        update_item('connections', 0, {'connections': connections, 'version': str(version + 1)})
+        print("END connection deleted")
+
 
 def send_to_connection(event, message, connection_id=None):
     if not isinstance(message, str):
@@ -24,6 +49,12 @@ def send_to_connection(event, message, connection_id=None):
         print("Error sending to connection:", error)
         delete_connection(connection_id)
 
+def notify_users(event, message):
+    connections, _ = get_connections()
+    if len(connections) > 0:
+        for connection_id in connections:
+            send_to_connection(event, message, connection_id)
+
 
 def get_item(partition_id, sort_id):
     response = table.get_item(
@@ -35,24 +66,46 @@ def get_item(partition_id, sort_id):
     )
     return response.get("Item", None)
 
+def query_for_max_bid(item_id):
+    response = table.query(
+        KeyConditionExpression=Key('partition_id').eq(item_id),
+        ScanIndexForward=False,
+        Limit=1
+    )
+    return response
+
 def get_all_bids():
-    # TODO - doesn't actually work, just pseudocode
-    items = get_item('items', 'items')
-    responses = []
-    for item in items:            
-        response = table.query(
-            KeyConditionExpression=Key('partition_id').eq(item["item_id"])
-        )
-        responses << response
+    debug("START - get all bids")
+    inventory = get_item('inventory', 0)
+    debug("found items: ", inventory)
+    listings = []
+    if inventory:
+        for item in inventory["items"]: 
+            debug("looking for latest bid for ", item)  
+            response = query_for_max_bid(item)
+            listing = next(iter(response['Items']), None)         
+            debug("found individual item: ", listing)
+            listings.append(parse_listing(listing))
 
-    return responses
+    debug("DONE getting bids, found: ", listings)
+    return listings
 
+def parse_listing(listing):
+    if listing:
+        current_bid = listing.get('sort_id', None)
+        if current_bid:
+            # convert it to a nicely readable dollar format
+            current_bid = str((current_bid / 100).quantize(Decimal("0.00")))
+        return { 
+            'title': listing.get('partition_id', None),
+            'current_bid': current_bid,
+            'timestamp': listing.get('bid_at', None)
+        }
+    return None
 
-def get_connected_users():
-    return get_item('connections', 'connections')
+def debug(*args):
+    print(*args)
 
-def get_items():
-    return get_item('items', 'items')
 
 def store_item(partition_id, sort_id, attributes=None):
     ''' Stores the provided attributes in Dynamo. If none are provided, it just stores the 
@@ -65,22 +118,6 @@ def store_item(partition_id, sort_id, attributes=None):
         Item=item
     )
 
-def store_connection_row(connection_id):
-    print("START store the connection")
-    record = get_item('connections', 'connections')
-
-    print("connections:", record)
-    connections = []
-    version = 0
-    if record:
-        print("found record: ", record)
-        connections = record["connections"] 
-        version = int(record["version"])
-
-    
-    connections.append(connection_id)
-    update_item('connections', 'connections', {'connections': connections, 'version': str(version + 1)})
-    print("END connection stored")
 
 def store_bid(item_id, bid_amount, attributes):
     return store_item(item_id, bid_amount, attributes)
@@ -107,34 +144,15 @@ def update_item(partition_id, sort_id, attributes):
         ConditionExpression=Attr('version').not_exists() | Attr('version').eq(version)
     )
 
-def delete_item(partition_id, sort_id):
-    table.delete_item(
-        Key={
-            'partition_id': partition_id,
-            'sort_id': sort_id
-        }
-    )
-
-def delete_connection(connection_id):
-    print("START delete the connection")
-    record = get_item('connections', 'connections')
-
-    if record:
-        print("found connections record: ", record)
-        connections = record["connections"]
-        connections.remove(connection_id)
-        version = int(record["version"])   
-
-        update_item('connections', 'connections', {'connections': connections, 'version': str(version + 1)})
-        print("END connection deleted")
+# def delete_item(partition_id, sort_id):
+#     table.delete_item(
+#         Key={
+#             'partition_id': partition_id,
+#             'sort_id': sort_id
+#         }
+#     )
 
 
-def notify_users(event, message):
-    # TODO: must modify
-    users = get_item('connection', 'connection')
-    for user in users:
-        connection_id = user['connection_id']
-        send_to_connection(event, message, connection_id)
 
 
 def handle_error(message, event, error_code=400):
