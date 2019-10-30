@@ -74,7 +74,7 @@ def store_connection_row(connection_id):
     version = 0
     if record:
         print("found record: ", record)
-        connections = record["connections"]
+        connections = record["connections"] 
         version = int(record["version"])
 
     
@@ -116,8 +116,18 @@ def delete_item(partition_id, sort_id):
     )
 
 def delete_connection(connection_id):
-    # TODO: implement
-    return None
+    print("START delete the connection")
+    record = get_item('connections', 'connections')
+
+    if record:
+        print("found connections record: ", record)
+        connections = record["connections"]
+        connections.remove(connection_id)
+        version = int(record["version"])   
+
+        update_item('connections', 'connections', {'connections': connections, 'version': str(version + 1)})
+        print("END connection deleted")
+
 
 def notify_users(event, message):
     # TODO: must modify
