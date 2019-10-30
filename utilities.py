@@ -34,6 +34,19 @@ def get_item(partition_id, sort_id):
     )
     return response.get("Item", None)
 
+def get_all_bids():
+    # TODO - doesn't actually work, just pseudocode
+    items = get_item('items', 'items')
+    responses = []
+    for item in items:            
+        response = table.query(
+            KeyConditionExpression=Key('partition_id').eq(item["item_id"])
+        )
+        responses << response
+
+    return responses
+
+
 def get_connected_users():
     return get_item('connections', 'connections')
 
@@ -51,7 +64,7 @@ def store_item(partition_id, sort_id, attributes=None):
         Item=item
     )
 
-def store_connection_row(connection_id, attributes):
+def store_connection_row(connection_id):
     # TODO: need to implement
     return None
     # return store_item(partition_id_from_connection(connection_id), connection_id, attributes)
