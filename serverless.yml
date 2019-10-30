@@ -50,6 +50,16 @@ functions:
       - websocket:
           route: $connect 
           routeResponseSelectionExpression: $default
+  refresh:
+    handler: lambdas/refresh.execute
+    events:
+      - websocket:
+          route: refresh
+  bid:
+    handler: lambdas/bid.execute
+    events:
+      - websocket:
+          route: bid
   disconnect:
     handler: lambdas/disconnect.execute
     events:
@@ -63,9 +73,10 @@ functions:
 
 resources:
   Resources:
-    TodosDynamoDbTable:
+    DynamoDbTable:
       Type: 'AWS::DynamoDB::Table'
       Properties:
+        TableName: data
         AttributeDefinitions:
           -
             AttributeName: partition_id
@@ -80,9 +91,7 @@ resources:
           - 
             AttributeName: sort_id
             KeyType: RANGE
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1
         TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        BillingMode: PAY_PER_REQUEST 
 
 
