@@ -101,8 +101,9 @@ def delete_connection(connection_id):
     # TODO: implement
     return None
 
-def notify_users(event, users, message):
+def notify_users(event, message):
     # TODO: must modify
+    users = get_item('connection', 'connection')
     for user in users:
         connection_id = user['connection_id']
         send_to_connection(event, message, connection_id)
