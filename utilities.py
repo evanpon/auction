@@ -29,7 +29,7 @@ def get_item(partition_id, sort_id):
     response = table.get_item(
         Key={
             'partition_id': partition_id,
-            'sort': sort_id
+            'sort_id': sort_id
         },
         ConsistentRead=True
     )
@@ -66,16 +66,21 @@ def store_item(partition_id, sort_id, attributes=None):
     )
 
 def store_connection_row(connection_id):
-    record = get_item('connections', '')
+    print("START store the connection")
+    record = get_item('connections', 'connections')
+
     print("connections:", record)
     connections = []
     version = 0
     if record:
+        print("found record: ", record)
         connections = record["connections"]
-        version = record["version"]
+        version = int(record["version"])
 
+    
     connections.append(connection_id)
-    update_item('connections', '', {'connections': connections, 'version': version + 1})
+    update_item('connections', 'connections', {'connections': connections, 'version': str(version + 1)})
+    print("END connection stored")
 
 def store_bid(item_id, bid_amount, attributes):
     return store_item(item_id, bid_amount, attributes)
@@ -84,11 +89,14 @@ def update_item(partition_id, sort_id, attributes):
     update_expressions = []
     expression_values = {}
     for key in attributes:
-        update_expressions.append(f"SET {key}=:{key}")
+        update_expressions.append(f"{key}=:{key}")
         expression_values[f":{key}"] = attributes[key]
 
-    update_expression_str = ','.join(update_expressions)
-
+    update_expression_str = "SET " + ','.join(update_expressions)
+    version = str(int(attributes['version']) - 1)
+    print("Version:", version)
+    print("update expression: ", update_expression_str)
+    print('attribute values:', expression_values)
     return table.update_item(
         Key={
             'partition_id': partition_id,
@@ -96,8 +104,9 @@ def update_item(partition_id, sort_id, attributes):
         },
         UpdateExpression=update_expression_str,
         ExpressionAttributeValues=expression_values,
-        ConditionExpression=Attr('version').not_exists | Attr('version').eq(attributes['version'] - 1)
+        ConditionExpression=Attr('version').not_exists() | Attr('version').eq(version)
     )
+
 def delete_item(partition_id, sort_id):
     table.delete_item(
         Key={
