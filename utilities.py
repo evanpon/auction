@@ -1,7 +1,7 @@
 import boto3
 import os
 import json
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
 
 def dynamo_table():
     dynamodb = boto3.resource('dynamodb')
@@ -30,7 +30,8 @@ def get_item(partition_id, sort_id):
         Key={
             'partition_id': partition_id,
             'sort': sort_id
-        }
+        },
+        ConsistentRead=True
     )
     return response.get("Item", None)
 
@@ -65,9 +66,16 @@ def store_item(partition_id, sort_id, attributes=None):
     )
 
 def store_connection_row(connection_id):
-    # TODO: need to implement
-    return None
-    # return store_item(partition_id_from_connection(connection_id), connection_id, attributes)
+    record = get_item('connections', '')
+    print("connections:", record)
+    connections = []
+    version = 0
+    if record:
+        connections = record["connections"]
+        version = record["version"]
+
+    connections.append(connection_id)
+    update_item('connections', '', {'connections': connections, 'version': version + 1})
 
 def store_bid(item_id, bid_amount, attributes):
     return store_item(item_id, bid_amount, attributes)
@@ -87,7 +95,8 @@ def update_item(partition_id, sort_id, attributes):
             'sort_id': sort_id
         },
         UpdateExpression=update_expression_str,
-        ExpressionAttributeValues=expression_values
+        ExpressionAttributeValues=expression_values,
+        ConditionExpression=Attr('version').not_exists | Attr('version').eq(attributes['version'] - 1)
     )
 def delete_item(partition_id, sort_id):
     table.delete_item(

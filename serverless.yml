@@ -31,7 +31,7 @@ provider:
   region: us-west-2
   environment:
     DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
- iamRoleStatements:
+  iamRoleStatements:
     - Effect: Allow
       Action:
         - dynamodb:Query
@@ -76,7 +76,6 @@ resources:
     DynamoDbTable:
       Type: 'AWS::DynamoDB::Table'
       Properties:
-        TableName: data
         AttributeDefinitions:
           -
             AttributeName: partition_id
